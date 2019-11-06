@@ -33,6 +33,7 @@
 *  POSSIBILITY OF SUCH DAMAGE.
 *
 * Author: Eitan Marder-Eppstein
+* Modified by: Jeeseon Kim
 *********************************************************************/
 #ifndef DWA_LOCAL_PLANNER2_DWA_PLANNER_ROS2_H_
 #define DWA_LOCAL_PLANNER2_DWA_PLANNER_ROS2_H_
@@ -59,11 +60,11 @@
 
 #include <dwa_local_planner2/dwa_planner2.h>
 
-//#!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//#!
 #include <nav_msgs/OccupancyGrid.h>
 #include <vector>
 #include <sensor_msgs/LaserScan.h>
-//#!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//#!
 
 // some definitions of functions
 #define MAP_INDEX(map, i, j) ((i) + (j) * map.size_x)
@@ -158,14 +159,15 @@ namespace dwa_local_planner2 {
 
 
 
-    //#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    //#!
       void scanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg);
       void computeTTC();
+      void findObstacles();
       /**
        * @brief Given static map, assume occupied positions in the map
        */
       void mapProcess(const nav_msgs::OccupancyGrid& map);
-    //#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    //#!
 
 
       tf::TransformListener* tf_; ///< @brief Used for transforming point clouds
@@ -194,7 +196,7 @@ namespace dwa_local_planner2 {
       std::string odom_topic_;
 
 
-      //#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      //#!
       nav_msgs::OccupancyGrid current_map_;
       std::vector<std::pair<float, float> > map_position_;
 
@@ -203,7 +205,7 @@ namespace dwa_local_planner2 {
       //
       ros::Subscriber scan_sub;
 
-      //#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      //#!
   };
 };
 #endif

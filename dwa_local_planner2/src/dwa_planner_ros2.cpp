@@ -33,6 +33,7 @@
 *  POSSIBILITY OF SUCH DAMAGE.
 *
 * Author: Eitan Marder-Eppstein
+* Modified by: Jeeseon Kim
 *********************************************************************/
 
 #include <dwa_local_planner2/dwa_planner_ros2.h>
@@ -56,6 +57,7 @@
 //register this planner as a BaseLocalPlanner plugin
 PLUGINLIB_EXPORT_CLASS(dwa_local_planner2::DWAPlannerROS2, nav_core::BaseLocalPlanner)
 
+using namespace std;
 
 namespace dwa_local_planner2 {
 
@@ -113,7 +115,6 @@ namespace dwa_local_planner2 {
 
       float w_x, w_y;
 
-      //ROS_INFO("mapProcess first time!!!!!");
       map_position_.clear();
 
       for (std::size_t j=0; j < map_info.size_y; j++) {
@@ -123,17 +124,55 @@ namespace dwa_local_planner2 {
                   w_x = MAP_WXGX(map_info, i);
                   w_y = MAP_WYGY(map_info, j);
                   map_position_.push_back(std::make_pair(w_x, w_y));
-
-                  //ROS_INFO("%f %f",w_x,w_y);
               }
           }
       }
       //ROS_INFO("vec size: %d", map_position_.size());
   }
 
-  bool dynamic;
-  void DWAPlannerROS2::computeTTC(){
+  float max_dist = -10000;
+  float prev_x, prev_y;
+  float curr_x, curr_y;
 
+  std::vector<pair<float, float> > curr_obs;
+  std::vector<pair<float, float> > prev_obs;
+  float obstacles_prev[10][2];
+
+  void DWAPlannerROS2::computeTTC(){
+    findObstacles();
+
+    //find previous obstacle who has minimum distance with obstacle idx
+    for(int idx = 0; idx < curr_obs.size(); idx++){
+        curr_x = curr_obs[idx].first;
+        curr_y = curr_obs[idx].second;
+        //ROS_INFO("Assumed position: (%f, %f)", curr_x, curr_y);
+        float min_dist_ = 10000;
+        int min_idx;
+
+        for(int j = 0; j < 3 ; j++){
+            float dist_ = sqrt(powf(curr_x - obstacles_prev[j][0], 2.0) + powf(curr_y - obstacles_prev[j][1], 2.0));
+            if(dist_ < min_dist_){
+                min_dist_ = dist_;
+                min_idx = j;
+            }
+        }
+    }
+
+    //update previous state to current state
+    for(int idx = 0; idx < 10; idx++){
+        if(idx < curr_obs.size()){
+            obstacles_prev[idx][0] = curr_obs[idx].first;
+            obstacles_prev[idx][1] = curr_obs[idx].second;
+        }
+        else{
+            obstacles_prev[idx][0] = 10000;
+            obstacles_prev[idx][1] = 10000;
+        }
+    }
+    curr_obs.clear();
+  }
+
+  void DWAPlannerROS2::findObstacles(){
 
       std::vector<int> obs_idx;
       obs_idx.reserve(300);
@@ -145,8 +184,8 @@ namespace dwa_local_planner2 {
 
       int obs_count = 0;
       float min_dist;
+      bool dynamic;
 
-      bool zero_merge = false;
       int *p1, *p2, *p3;
       int *grp_start_end;
       float *center_pos;
@@ -158,10 +197,6 @@ namespace dwa_local_planner2 {
       }
 
       ROS_INFO("pose: %.3f %.3f", current_pose_.getOrigin().getX(), current_pose_.getOrigin().getY());
-//      ROS_INFO("ranges[0] = %.3f/ %.3f/ %.3f, %.3f", rcv_msg_.ranges[0], rb_yaw * M_PI / 180,
-//              current_pose_.getOrigin().getX() + rcv_msg_.ranges[0] * std::cos(rcv_msg_.angle_increment * 0 + rb_yaw),
-//              current_pose_.getOrigin().getY() + rcv_msg_.ranges[0] * std::sin(rcv_msg_.angle_increment * 0 + rb_yaw));
-
 
       //find dynamic points, add dynamic points to obs_idx
       for(int i = 0; i < rcv_msg_.ranges.size() ; i++){
@@ -189,10 +224,8 @@ namespace dwa_local_planner2 {
                   obs_idx.push_back(i);
               }
           }
-
           dynamic = false;
       }
-
 
 
       int former_idx = obs_idx.at(0);
@@ -200,7 +233,7 @@ namespace dwa_local_planner2 {
       //count obstacles
       for (std::vector<int>::iterator itr = obs_idx.begin(); itr != obs_idx.end(); ++itr) {
 
-          if(*itr - former_idx != 1){ //check seamless
+          if(*itr - former_idx != 1){
               obs_count++;
           }
           former_idx = *itr;
@@ -234,7 +267,7 @@ namespace dwa_local_planner2 {
       }
 
 
-      //find index for each obstacle
+      //find lsr index for each obstacle
       for (int i = 0; i < obs_count; i++) {
           p1[i] = grp_start_end[i*2];     //start index
           p3[i] = grp_start_end[i*2+1];   //end index
@@ -251,16 +284,12 @@ namespace dwa_local_planner2 {
       }
 
 
-      //if 0 and 359 exists, then
+      //Obstacle exists at robot head direction (remove in case for duplicate count)
       if(obs_idx.front() == 0 && obs_idx.back() == 359){
-          //zero_merge = true;
-
           if(rcv_msg_.ranges[p2[0]] >= rcv_msg_.ranges[p2[obs_count - 1]]){
              p2[0] = p2[obs_count - 1];
           }
-
           p1[0] = p1[obs_count - 1];
-
           p1[obs_count - 1] = 0;
           p2[obs_count - 1] = 0;
           p3[obs_count - 1] = 0;
@@ -269,24 +298,24 @@ namespace dwa_local_planner2 {
       }
 
       center_pos = new float[obs_count * 2];
+      int obs_count_mod = obs_count;
 
+      //form triangle with p1, p2, p3 and assume center position of obstacles
       for (int i = 0; i < obs_count; i++) {
 
           float tri_a_x, tri_a_y, tri_c_x, tri_c_y, tri_b_x, tri_b_y;
           float a_vec_x, a_vec_y;
           float b_vec_x, b_vec_y;
-
           float a_vec_sq, b_vec_sq, a_b_in;
           float p, q;
 
-
-          tri_a_x = rcv_msg_.ranges[p1[i]] * std::cos(rcv_msg_.angle_increment * p1[i]);
+          tri_a_x = rcv_msg_.ranges[p1[i]] * std::cos(rcv_msg_.angle_increment * p1[i]);    //A
           tri_a_y = rcv_msg_.ranges[p1[i]] * std::sin(rcv_msg_.angle_increment * p1[i]);
 
-          tri_c_x = rcv_msg_.ranges[p2[i]] * std::cos(rcv_msg_.angle_increment * p2[i]);
+          tri_c_x = rcv_msg_.ranges[p2[i]] * std::cos(rcv_msg_.angle_increment * p2[i]);    //C
           tri_c_y = rcv_msg_.ranges[p2[i]] * std::sin(rcv_msg_.angle_increment * p2[i]);
 
-          tri_b_x = rcv_msg_.ranges[p3[i]] * std::cos(rcv_msg_.angle_increment * p3[i]);
+          tri_b_x = rcv_msg_.ranges[p3[i]] * std::cos(rcv_msg_.angle_increment * p3[i]);    //B
           tri_b_y = rcv_msg_.ranges[p3[i]] * std::sin(rcv_msg_.angle_increment * p3[i]);
 
           a_vec_x = tri_a_x - tri_c_x; //CA == OA - OC
@@ -297,16 +326,22 @@ namespace dwa_local_planner2 {
 
           a_vec_sq = a_vec_x * a_vec_x + a_vec_y * a_vec_y;   //  |CA|^2
           b_vec_sq = b_vec_x * b_vec_x + b_vec_y * b_vec_y;   //  |CB|^2
-          a_b_in = a_vec_x * b_vec_x + a_vec_y * b_vec_y;     //  CA*CB
+          a_b_in = a_vec_x * b_vec_x + a_vec_y * b_vec_y;     //  CA dot CB
 
           p = 1 / (a_vec_sq * a_b_in - b_vec_sq * a_b_in) * (a_b_in * 0.5 * a_vec_sq - a_b_in * 0.5 * b_vec_sq); //inverse matrix
           q = 1 / (a_vec_sq * a_b_in - b_vec_sq * a_b_in) * (-1*b_vec_sq * 0.5 * a_vec_sq + a_vec_sq * 0.5 * b_vec_sq);
 
           center_pos[2*i] = tri_c_x + p * a_vec_x + q * b_vec_x;
           center_pos[2*i + 1] = tri_c_y + p * a_vec_y + q * b_vec_y;
-          ROS_INFO("Assumed position: (%f,%f)", current_pose_.getOrigin().getX() + center_pos[2*i], current_pose_.getOrigin().getY() + center_pos[2*i + 1]);
-      }
 
+          if(std::isnan(center_pos[2 * i + 1]) || std::isnan(center_pos[2 * i])){   //remove sensed obstacle if assumed position is nan value
+                obs_count_mod--;
+          }
+          else{
+              curr_obs.push_back(make_pair(current_pose_.getOrigin().getX() + center_pos[2*i], current_pose_.getOrigin().getY() + center_pos[2*i + 1]));
+              //ROS_INFO("Assumed position: (%f,%f)", current_pose_.getOrigin().getX() + center_pos[2*i], current_pose_.getOrigin().getY() + center_pos[2*i + 1]);
+          }
+      }
 
       delete [] p1;
       delete [] p2;
@@ -324,9 +359,7 @@ namespace dwa_local_planner2 {
   }
 
   void DWAPlannerROS2::scanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg){
-
       //laser data to rcv_msg_
-
       rcv_msg_.header = msg->header;
       rcv_msg_.angle_min = msg->angle_min;
       rcv_msg_.angle_max = msg->angle_max;
@@ -337,18 +370,6 @@ namespace dwa_local_planner2 {
       rcv_msg_.range_max = msg->range_max;
       rcv_msg_.ranges = msg->ranges;
       rcv_msg_.intensities = msg->intensities;
-
-//      rcv_msg_.header = msg->header;
-//      rcv_msg_.angle_min = msg->angle_min;
-//      rcv_msg_.angle_max = msg->angle_max;
-//      rcv_msg_.angle_increment = msg->angle_increment;
-//      rcv_msg_.time_increment = msg->time_increment;
-//      rcv_msg_.scan_time = msg->scan_time;
-//      rcv_msg_.range_min = msg->range_min;
-//      rcv_msg_.range_max = msg->range_max;
-//      rcv_msg_.ranges = msg->ranges;
-//      rcv_msg_.intensities = msg->intensities;
-      //ROS_INFO("ooooh");
   }
 
   void DWAPlannerROS2::initialize(
@@ -388,9 +409,8 @@ namespace dwa_local_planner2 {
       dsrv_->setCallback(cb);
 
 
-      //#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-      scan_sub = private_nh.subscribe<sensor_msgs::LaserScan>("/scan",1,&DWAPlannerROS2::scanCallBack, this);
+      //#!
+      scan_sub = private_nh.subscribe<sensor_msgs::LaserScan>("/scan", 1, &DWAPlannerROS2::scanCallBack, this);
 
 
       nav_msgs::GetMap::Request  req;
@@ -403,7 +423,7 @@ namespace dwa_local_planner2 {
       }
       current_map_ = resp.map;
       mapProcess(current_map_);
-      //#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      //#!
 
     }
     else{
@@ -540,11 +560,9 @@ namespace dwa_local_planner2 {
     }
     std::vector<geometry_msgs::PoseStamped> transformed_plan;
 
-    //#!!!!!!!!!!!!!!!!!!!!!!!!!!
-    //receive
-    //ROS_INFO("compute velocity commands");
+    //#!
     computeTTC();
-    //#!!!!!!!!!!!!!!!!!!!!!!!!!!
+    //#!
 
     if ( ! planner_util_.getLocalPlan(current_pose_, transformed_plan)) {
       ROS_ERROR("Could not get local plan");
