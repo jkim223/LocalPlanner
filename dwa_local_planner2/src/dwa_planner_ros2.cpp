@@ -130,56 +130,89 @@ namespace dwa_local_planner2 {
       //ROS_INFO("vec size: %d", map_position_.size());
   }
 
-  float max_dist = -10000;
-  float prev_x, prev_y;
-  float curr_x, curr_y;
+  float obs_curr_x, obs_curr_y;
 
   std::vector<pair<float, float> > curr_obs;
-  std::vector<pair<float, float> > prev_obs;
   float obstacles_prev[10][2];
+  float time_to_collide[10];
+  int cnt_ = 1;
 
   void DWAPlannerROS2::computeTTC(){
-    findObstacles();
+    if(cnt_ % 2 != 0){
+        findObstacles();
 
-    //find previous obstacle who has minimum distance with obstacle idx
-    for(int idx = 0; idx < curr_obs.size(); idx++){
-        curr_x = curr_obs[idx].first;
-        curr_y = curr_obs[idx].second;
-        //ROS_INFO("Assumed position: (%f, %f)", curr_x, curr_y);
-        float min_dist_ = 10000;
-        int min_idx;
+        float robot_vec_[2] = {current_pose_.getOrigin().getX() - previous_pose_.getOrigin().getX(),
+                               current_pose_.getOrigin().getY() - previous_pose_.getOrigin().getY()};   //robot vector
+        float obs_vec_[2] = {0, 0};
+        float v_rel_[2];
 
-        for(int j = 0; j < 3 ; j++){
-            float dist_ = sqrt(powf(curr_x - obstacles_prev[j][0], 2.0) + powf(curr_y - obstacles_prev[j][1], 2.0));
-            if(dist_ < min_dist_){
-                min_dist_ = dist_;
-                min_idx = j;
+        //ROS_INFO("pose: %f, %f / vec: %f, %f", current_pose_.getOrigin().getX(), current_pose_.getOrigin().getY(), robot_vec_[0], robot_vec_[1]);
+
+        for(int idx = 0; idx < curr_obs.size(); idx++){
+            obs_curr_x = curr_obs[idx].first;
+            obs_curr_y = curr_obs[idx].second;
+
+            //ROS_INFO("Assumed position: (%f, %f)", obs_curr_x, obs_curr_y); //obs pos
+            float min_dist_ = 10000;
+            int min_idx;
+
+            //find previous obstacle j who has minimum distance with obstacle idx
+            for(int j = 0; j < 3 ; j++){
+                float dist_ = sqrt(powf(obs_curr_x - obstacles_prev[j][0], 2.0) + powf(obs_curr_y - obstacles_prev[j][1], 2.0));
+                if(dist_ < min_dist_){
+                    min_dist_ = dist_;
+                    min_idx = j;
+                }
+            }
+            obs_vec_[0] = obs_curr_x - obstacles_prev[min_idx][0];
+            obs_vec_[1] = obs_curr_y - obstacles_prev[min_idx][1];   //obs vector
+
+            //ROS_INFO("obs vec %d: %f, %f", idx, obs_vec_[0], obs_vec_[1]);
+
+            v_rel_[0] = robot_vec_[0] - obs_vec_[0];
+            v_rel_[1] = robot_vec_[1] - obs_vec_[1];
+
+            float robot_vec_s  = sqrt(powf(robot_vec_[0], 2.0) + powf(robot_vec_[1], 2.0));
+            float obs_vec_s = sqrt(powf(obs_vec_[0], 2.0) + powf(obs_vec_[1], 2.0));
+            float f_dot = robot_vec_[0] * obs_vec_[0] + robot_vec_[1] * obs_vec_[1];    //inner product
+            float cos_theta = f_dot / (robot_vec_s * obs_vec_s);    //cosine theta between 2 vector
+
+            float d_rel_s = sqrt(powf(obs_curr_x - current_pose_.getOrigin().getX(), 2.0)
+                               + powf(obs_curr_y - current_pose_.getOrigin().getY(), 2.0));
+            float v_rel_s = sqrt(powf(v_rel_[0], 2.0) + powf(v_rel_[1], 2.0));
+
+            float ttc = d_rel_s / (v_rel_s * cos_theta);
+            //ROS_INFO("%f",ttc);
+       }
+
+
+        //update previous state to current state
+        previous_pose_ = current_pose_;
+
+        for(int idx = 0; idx < 10; idx++){
+            if(idx < curr_obs.size()){
+                obstacles_prev[idx][0] = curr_obs[idx].first;
+                obstacles_prev[idx][1] = curr_obs[idx].second;
+            }
+            else{
+                obstacles_prev[idx][0] = 10000;
+                obstacles_prev[idx][1] = 10000;
             }
         }
-    }
 
-    //update previous state to current state
-    for(int idx = 0; idx < 10; idx++){
-        if(idx < curr_obs.size()){
-            obstacles_prev[idx][0] = curr_obs[idx].first;
-            obstacles_prev[idx][1] = curr_obs[idx].second;
-        }
-        else{
-            obstacles_prev[idx][0] = 10000;
-            obstacles_prev[idx][1] = 10000;
-        }
+        //clear
+        curr_obs.clear();
     }
-    curr_obs.clear();
+    cnt_++;
   }
 
   void DWAPlannerROS2::findObstacles(){
 
-      std::vector<int> obs_idx;
+      std::vector<int> obs_idx; //index data for valid ranges[] values
       obs_idx.reserve(300);
 
-      //laser data
       float pt_x, pt_y;
-      float rb_yaw;
+      float rb_yaw; //robot yaw
       float w_x = 0, w_y = 0, dist_sq = 0;
 
       int obs_count = 0;
@@ -195,8 +228,6 @@ namespace dwa_local_planner2 {
       if(rb_yaw < 0){
           rb_yaw += 2 * M_PI;
       }
-
-      ROS_INFO("pose: %.3f %.3f", current_pose_.getOrigin().getX(), current_pose_.getOrigin().getY());
 
       //find dynamic points, add dynamic points to obs_idx
       for(int i = 0; i < rcv_msg_.ranges.size() ; i++){
@@ -220,34 +251,27 @@ namespace dwa_local_planner2 {
                   dynamic = true;
               }
               if(dynamic){
-                  //ROS_INFO("found something dynamic, index %d", i);
                   obs_idx.push_back(i);
               }
           }
           dynamic = false;
       }
 
-
       int former_idx = obs_idx.at(0);
 
       //count obstacles
       for (std::vector<int>::iterator itr = obs_idx.begin(); itr != obs_idx.end(); ++itr) {
-
           if(*itr - former_idx != 1){
               obs_count++;
           }
           former_idx = *itr;
       }
 
-
       //allocate index array for each obstacle
       p1 = new int[obs_count];    //start
       p2 = new int[obs_count];    //min
       p3 = new int[obs_count];    //end
-
       grp_start_end = new int[obs_count * 2];
-
-
 
       //fill grp_start_end[]: [i*2]: start idx for i-th obs / [i*2+1]: end idx for i-th obs
       int sep_idx_ = 0;
@@ -266,23 +290,19 @@ namespace dwa_local_planner2 {
           former_idx = *itr;
       }
 
-
       //find lsr index for each obstacle
       for (int i = 0; i < obs_count; i++) {
           p1[i] = grp_start_end[i*2];     //start index
           p3[i] = grp_start_end[i*2+1];   //end index
-
           min_dist = rcv_msg_.range_max;
 
           for (int j = p1[i]; j <= p3[i]; j++) {
-
               if(rcv_msg_.ranges[j] < min_dist){   //find index with minimum distance
                   min_dist = rcv_msg_.ranges[j];
                   p2[i] = j;
               }
           }
       }
-
 
       //Obstacle exists at robot head direction (remove in case for duplicate count)
       if(obs_idx.front() == 0 && obs_idx.back() == 359){
@@ -293,12 +313,10 @@ namespace dwa_local_planner2 {
           p1[obs_count - 1] = 0;
           p2[obs_count - 1] = 0;
           p3[obs_count - 1] = 0;
-
           obs_count--;
       }
 
       center_pos = new float[obs_count * 2];
-      int obs_count_mod = obs_count;
 
       //form triangle with p1, p2, p3 and assume center position of obstacles
       for (int i = 0; i < obs_count; i++) {
@@ -311,16 +329,13 @@ namespace dwa_local_planner2 {
 
           tri_a_x = rcv_msg_.ranges[p1[i]] * std::cos(rcv_msg_.angle_increment * p1[i]);    //A
           tri_a_y = rcv_msg_.ranges[p1[i]] * std::sin(rcv_msg_.angle_increment * p1[i]);
-
           tri_c_x = rcv_msg_.ranges[p2[i]] * std::cos(rcv_msg_.angle_increment * p2[i]);    //C
           tri_c_y = rcv_msg_.ranges[p2[i]] * std::sin(rcv_msg_.angle_increment * p2[i]);
-
           tri_b_x = rcv_msg_.ranges[p3[i]] * std::cos(rcv_msg_.angle_increment * p3[i]);    //B
           tri_b_y = rcv_msg_.ranges[p3[i]] * std::sin(rcv_msg_.angle_increment * p3[i]);
 
           a_vec_x = tri_a_x - tri_c_x; //CA == OA - OC
           a_vec_y = tri_a_y - tri_c_y;
-
           b_vec_x = tri_b_x - tri_c_x; //CB == OB - OC
           b_vec_y = tri_b_y - tri_c_y;
 
@@ -335,11 +350,10 @@ namespace dwa_local_planner2 {
           center_pos[2*i + 1] = tri_c_y + p * a_vec_y + q * b_vec_y;
 
           if(std::isnan(center_pos[2 * i + 1]) || std::isnan(center_pos[2 * i])){   //remove sensed obstacle if assumed position is nan value
-                obs_count_mod--;
+                //obs_count_mod--;
           }
           else{
-              curr_obs.push_back(make_pair(current_pose_.getOrigin().getX() + center_pos[2*i], current_pose_.getOrigin().getY() + center_pos[2*i + 1]));
-              //ROS_INFO("Assumed position: (%f,%f)", current_pose_.getOrigin().getX() + center_pos[2*i], current_pose_.getOrigin().getY() + center_pos[2*i + 1]);
+              curr_obs.push_back(make_pair(current_pose_.getOrigin().getX() + center_pos[2*i], current_pose_.getOrigin().getY() + center_pos[2*i + 1]));    //obs position
           }
       }
 
