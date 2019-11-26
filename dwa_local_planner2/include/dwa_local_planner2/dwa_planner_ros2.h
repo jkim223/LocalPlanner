@@ -199,12 +199,20 @@ namespace dwa_local_planner2 {
       //#!
       nav_msgs::OccupancyGrid current_map_;
       std::vector<std::pair<float, float> > map_position_;
+      std::vector<int> obs_idx_;      //index data for valid ranges[] values
+      tf::Stamped<tf::Pose> previous_pose_;
 
       sensor_msgs::LaserScan rcv_msg_;
       sensor_msgs::LaserScan lsr_msg_;
-      //
       ros::Subscriber scan_sub;
 
+      std::vector<std::pair<float, float> > curr_obs_;
+
+      std::vector<int> obs_direction_;
+      std::vector<float> obs_safe_prob_;
+      std::vector<double> robot_safe_dir_;
+
+      bool head_dir_;
       //#!
   };
 };
