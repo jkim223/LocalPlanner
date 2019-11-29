@@ -41,6 +41,8 @@
 #include <base_local_planner/trajectory_cost_function.h>
 #include <vector>
 
+using namespace std;
+
 namespace base_local_planner {
 
 /**
@@ -54,8 +56,12 @@ public:
 
   void setDirectionProbability(std::vector<double> & arr);
   double scoreTrajectory(Trajectory &traj);
-
   bool prepare() {return true;};
+
+private:
+
+  std::vector<double> vec_;
+  double cost_;
 };
 
 } /* namespace base_local_planner */

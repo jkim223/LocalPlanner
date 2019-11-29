@@ -33,6 +33,7 @@
 *  POSSIBILITY OF SUCH DAMAGE.
 *
 * Author: Eitan Marder-Eppstein
+* Modified by: Jeeseon Kim
 *********************************************************************/
 #ifndef DWA_LOCAL_PLANNER2_DWA_PLANNER2_H_
 #define DWA_LOCAL_PLANNER2_DWA_PLANNER2_H_
@@ -60,6 +61,7 @@
 #include <base_local_planner/obstacle_cost_function.h>
 #include <base_local_planner/twirling_cost_function.h>
 #include <base_local_planner/simple_scored_sampling_planner.h>
+#include <base_local_planner/probability_cost_function.h>
 
 #include <nav_msgs/Path.h>
 
@@ -150,6 +152,11 @@ namespace dwa_local_planner2 {
        */
       bool setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan);
 
+      /**
+       * @brief Set safety probability to each directions
+       */
+      void setProbability(std::vector<double> &arr);
+
     private:
 
       base_local_planner::LocalPlannerUtil *planner_util_;
@@ -184,8 +191,11 @@ namespace dwa_local_planner2 {
       base_local_planner::MapGridCostFunction goal_front_costs_;
       base_local_planner::MapGridCostFunction alignment_costs_;
       base_local_planner::TwirlingCostFunction twirling_costs_;
+      base_local_planner::ProbabilityCostFunction probability_costs_;
 
       base_local_planner::SimpleScoredSamplingPlanner scored_sampling_planner_;
+
+      std::vector<double> safety_direction_;
   };
 };
 #endif

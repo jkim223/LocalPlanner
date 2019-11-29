@@ -152,7 +152,7 @@ namespace dwa_local_planner2 {
     float obs_curr_x, obs_curr_y;     //obstacle position
 
     if(cnt_ % 2 != 0){
-        head_dir_ = false;
+
         findObstacles();
 
         float robot_vec[2] = {current_pose_.getOrigin().getX() - previous_pose_.getOrigin().getX(),
@@ -213,6 +213,7 @@ namespace dwa_local_planner2 {
 
         double gauss_prob;
         double min_prob = MAX_VAL;
+
         //compute safe probability for all directions
         for(int idx = 0; idx < rcv_msg_.ranges.size(); idx++){
             min_prob = MAX_VAL;
@@ -224,8 +225,9 @@ namespace dwa_local_planner2 {
                 }
             }
             robot_safe_dir_.push_back(min_prob);
+            //ROS_INFO("%d %lf", idx, robot_safe_dir_[idx]);
         }
-
+ //   ROS_INFO("size robot_safe_dir_1 : %d", robot_safe_dir_.size());
 //        for(int i = 0; i < obs_direction_.size(); i++){
 //            ROS_INFO("obs %d %f",obs_direction_[i], robot_safe_dir_[obs_direction_[i]]);
 //        }
@@ -286,6 +288,11 @@ namespace dwa_local_planner2 {
                 }
             }
         }
+
+        //send robot_safe_dir_ to base_local_planner::ProbabilityCostFunction
+        //prob_cost_function_.setDirectionProbability(robot_safe_dir_);
+  //      ROS_INFO("sizeof robot_safe_dir_2 : %d", sizeof(robot_safe_dir_));
+        dp_->setProbability(robot_safe_dir_);
 
         //clear
         curr_obs_.clear();
@@ -400,8 +407,6 @@ namespace dwa_local_planner2 {
           p2[obs_count - 1] = 0;
           p3[obs_count - 1] = 0;
           obs_count--;
-
-          head_dir_ = true;
       }
 
       center_pos = new float[obs_count * 2];
@@ -600,10 +605,13 @@ namespace dwa_local_planner2 {
     tf::Stamped<tf::Pose> drive_cmds;
     drive_cmds.frame_id_ = costmap_ros_->getBaseFrameID();
 
+    //
+
+
     // call with updated footprint
     base_local_planner::Trajectory path = dp_->findBestPath(global_pose, robot_vel, drive_cmds);
     //ROS_ERROR("Best: %.2f, %.2f, %.2f, %.2f", path.xv_, path.yv_, path.thetav_, path.cost_);
-
+    //ROS_INFO("%f",path.thetav_); //############
     /* For timing uncomment
     gettimeofday(&end, NULL);
     start_t = start.tv_sec + double(start.tv_usec) / 1e6;

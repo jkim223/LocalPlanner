@@ -212,7 +212,7 @@ namespace dwa_local_planner2 {
       std::vector<float> obs_safe_prob_;
       std::vector<double> robot_safe_dir_;
 
-      bool head_dir_;
+      base_local_planner::ProbabilityCostFunction prob_cost_function_;
       //#!
   };
 };
