@@ -66,6 +66,7 @@
 //#include <iostream>
 
 //std::ofstream ofs("value1.txt", std::ios::out);
+bool no_obstacles_ = false;
 //#//
 
 //register this planner as a BaseLocalPlanner plugin
@@ -143,7 +144,6 @@ namespace dwa_local_planner2 {
       }
   }
 
-  //std::vector<pair<float, float> > prev_obs;
   float obstacles_prev[10][2];
   float time_to_collide[10][2];
   int cnt_ = 1;
@@ -155,8 +155,21 @@ namespace dwa_local_planner2 {
 
         findObstacles();
 
+        if(no_obstacles_){
+            for(int idx = 0; idx < rcv_msg_.ranges.size(); idx++){
+                robot_safe_dir_.push_back(1.0);
+            }
+            dp_->setProbability(robot_safe_dir_);
+
+            //clear
+            curr_obs_.clear();
+            obs_direction_.clear();
+            obs_safe_prob_.clear();
+            return;
+        }
+
         float robot_vec[2] = {current_pose_.getOrigin().getX() - previous_pose_.getOrigin().getX(),
-                               current_pose_.getOrigin().getY() - previous_pose_.getOrigin().getY()};   //robot vector
+                               current_pose_.getOrigin().getY() - previous_pose_.getOrigin().getY()};   //robot vec
         float obs_vec[2] = {0, 0};
         float v_rel[2];
 
@@ -176,7 +189,7 @@ namespace dwa_local_planner2 {
                 }
             }
             obs_vec[0] = obs_curr_x - obstacles_prev[min_idx][0];
-            obs_vec[1] = obs_curr_y - obstacles_prev[min_idx][1];   //obs vector
+            obs_vec[1] = obs_curr_y - obstacles_prev[min_idx][1];   //obs vec
 
             v_rel[0] = robot_vec[0] - obs_vec[0];
             v_rel[1] = robot_vec[1] - obs_vec[1];
@@ -184,7 +197,7 @@ namespace dwa_local_planner2 {
             float robot_vec_s  = sqrt(powf(robot_vec[0], 2.0) + powf(robot_vec[1], 2.0));
             float obs_vec_s = sqrt(powf(obs_vec[0], 2.0) + powf(obs_vec[1], 2.0));
             float f_dot = robot_vec[0] * obs_vec[0] + robot_vec[1] * obs_vec[1];    //inner product
-            float cos_theta = f_dot / (robot_vec_s * obs_vec_s);    //cosine theta between 2 vector
+            float cos_theta = f_dot / (robot_vec_s * obs_vec_s);    //cosine theta between 2 vec
 
             float d_rel_s = sqrt(powf(obs_curr_x - current_pose_.getOrigin().getX(), 2.0)
                                + powf(obs_curr_y - current_pose_.getOrigin().getY(), 2.0));
@@ -225,21 +238,7 @@ namespace dwa_local_planner2 {
                 }
             }
             robot_safe_dir_.push_back(min_prob);
-            //ROS_INFO("%d %lf", idx, robot_safe_dir_[idx]);
         }
- //   ROS_INFO("size robot_safe_dir_1 : %d", robot_safe_dir_.size());
-//        for(int i = 0; i < obs_direction_.size(); i++){
-//            ROS_INFO("obs %d %f",obs_direction_[i], robot_safe_dir_[obs_direction_[i]]);
-//        }
-
-//        for(int i = 0; i < obs_direction_.size(); i++){
-//            ofs << i << "\n";    //frame number
-//            ofs << obs_direction_[i] << " " << robot_safe_dir_[obs_direction_[i]] << "\n"; //obs direction idx, safety value
-
-//            for(int j = 0; j < rcv_msg_.ranges.size(); j++){
-//                ofs << j << " " << robot_safe_dir_[j] << "\n";
-//            }
-//        }
 
         int min_prob_idx;
         int max_prob_idx;
@@ -290,8 +289,6 @@ namespace dwa_local_planner2 {
         }
 
         //send robot_safe_dir_ to base_local_planner::ProbabilityCostFunction
-        //prob_cost_function_.setDirectionProbability(robot_safe_dir_);
-  //      ROS_INFO("sizeof robot_safe_dir_2 : %d", sizeof(robot_safe_dir_));
         dp_->setProbability(robot_safe_dir_);
 
         //clear
@@ -348,6 +345,13 @@ namespace dwa_local_planner2 {
               }
           }
           dynamic = false;
+      }
+
+      no_obstacles_ = false;
+      if(obs_idx_.size() < 1){
+          no_obstacles_ = true;
+          obs_idx_.clear();
+          return;
       }
 
       int former_idx = obs_idx_.at(0);
@@ -611,7 +615,7 @@ namespace dwa_local_planner2 {
     // call with updated footprint
     base_local_planner::Trajectory path = dp_->findBestPath(global_pose, robot_vel, drive_cmds);
     //ROS_ERROR("Best: %.2f, %.2f, %.2f, %.2f", path.xv_, path.yv_, path.thetav_, path.cost_);
-    //ROS_INFO("%f",path.thetav_); //############
+
     /* For timing uncomment
     gettimeofday(&end, NULL);
     start_t = start.tv_sec + double(start.tv_usec) / 1e6;
