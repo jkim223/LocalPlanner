@@ -50,7 +50,7 @@
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 
-//#//
+//#!
 #include <algorithm>
 #include <nav_msgs/GetMap.h>
 #define MAX_VAL 10000
@@ -62,12 +62,8 @@
 #define GAUSS_ALPHA  0.1
 #define EPSILON 0.0001
 
-//#include <fstream>
-//#include <iostream>
-
-//std::ofstream ofs("value1.txt", std::ios::out);
 bool no_obstacles_ = false;
-//#//
+//#!
 
 //register this planner as a BaseLocalPlanner plugin
 PLUGINLIB_EXPORT_CLASS(dwa_local_planner2::DWAPlannerROS2, nav_core::BaseLocalPlanner)

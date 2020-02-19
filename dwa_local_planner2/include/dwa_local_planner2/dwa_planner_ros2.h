@@ -64,15 +64,13 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <vector>
 #include <sensor_msgs/LaserScan.h>
-//#!
 
-// some definitions of functions
+// Some definitions of functions
 #define MAP_INDEX(map, i, j) ((i) + (j) * map.size_x)
 #define MAP_WXGX(map, i) (map.origin_x + (i - map.size_x / 2) * map.scale)
 #define MAP_WYGY(map, j) (map.origin_y + (j - map.size_y / 2) * map.scale)
 
-
-// information of the map
+// Information of the map
 struct map_inf {
     double size_x;
     double size_y;
@@ -80,6 +78,7 @@ struct map_inf {
     double origin_x;
     double origin_y;
 };
+//#!
 
 namespace dwa_local_planner2 {
   /**
@@ -159,15 +158,21 @@ namespace dwa_local_planner2 {
 
 
 
-    //#!
+      //#!
       void scanCallBack(const sensor_msgs::LaserScan::ConstPtr& msg);
+	  /**
+	  * @brief Compute Time-to-Collision(TTC) when dynamic obstacles detected
+	  */
       void computeTTC();
+	  /**
+	  * @brief Sense dynamic points and segment to each obstacle
+	  */
       void findObstacles();
       /**
        * @brief Given static map, assume occupied positions in the map
        */
       void mapProcess(const nav_msgs::OccupancyGrid& map);
-    //#!
+	  //#!
 
 
       tf::TransformListener* tf_; ///< @brief Used for transforming point clouds

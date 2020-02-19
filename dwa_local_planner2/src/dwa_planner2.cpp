@@ -86,9 +86,9 @@ namespace dwa_local_planner2 {
     obstacle_costs_.setParams(config.max_trans_vel, config.max_scaling_factor, config.scaling_speed);
 
     twirling_costs_.setScale(config.twirling_scale);
-
-    probability_costs_.setScale(PROB_COST_SCALE);       //###################
-
+	//#!
+    probability_costs_.setScale(PROB_COST_SCALE);       
+	//#!
     int vx_samp, vy_samp, vth_samp;
     vx_samp = config.vx_samples;
     vy_samp = config.vy_samples;
@@ -156,7 +156,6 @@ namespace dwa_local_planner2 {
     private_nh.param("sum_scores", sum_scores, false);
     obstacle_costs_.setSumScores(sum_scores);
 
-    //probability_costs_.setDirectionProbability(safety_direction_);
     private_nh.param("publish_cost_grid_pc", publish_cost_grid_pc_, false);
     map_viz_.initialize(name, planner_util->getGlobalFrame(), boost::bind(&DWAPlanner2::getCellCosts, this, _1, _2, _3, _4, _5, _6));
 
@@ -178,7 +177,7 @@ namespace dwa_local_planner2 {
     critics.push_back(&path_costs_); // prefers trajectories on global path
     critics.push_back(&goal_costs_); // prefers trajectories that go towards (local) goal, based on wave propagation
     critics.push_back(&twirling_costs_); // optionally prefer trajectories that don't spin
-    critics.push_back(&probability_costs_);
+    critics.push_back(&probability_costs_); //#! prefer trajectories that avoid dynamic obstacles
 
     // trajectory generators
     std::vector<base_local_planner::TrajectorySampleGenerator*> generator_list;
@@ -216,9 +215,6 @@ namespace dwa_local_planner2 {
 
   void DWAPlanner2::setProbability(std::vector<double> &arr){
     safety_direction_ = arr;
-   // for(int i=0; i< safety_direction_.size();i++)
-    //    ROS_INFO("%d %lf",i, safety_direction_[i]);
-    //ROS_INFO("%lf %lf %lf %lf %lf", safety_direction_[0], safety_direction_[10], safety_direction_[20], safety_direction_[30], safety_direction_[40]);
   }
 
   /**
@@ -290,7 +286,7 @@ namespace dwa_local_planner2 {
       sin(angle_to_goal);
 
     goal_front_costs_.setTargetPoses(front_global_plan);
-    probability_costs_.setDirectionProbability(safety_direction_); //#############################
+    probability_costs_.setDirectionProbability(safety_direction_); //#!
 
     // keeping the nose on the path
     if (sq_dist > forward_point_distance_ * forward_point_distance_ * cheat_factor_) {
@@ -321,7 +317,7 @@ namespace dwa_local_planner2 {
     geometry_msgs::PoseStamped goal_pose = global_plan_.back();
     Eigen::Vector3f goal(goal_pose.pose.position.x, goal_pose.pose.position.y, tf::getYaw(goal_pose.pose.orientation));
     base_local_planner::LocalPlannerLimits limits = planner_util_->getCurrentLimits();
-//ROS_INFO("hello");////////////////////////
+
     // prepare cost functions and generators for this run
     generator_.initialise(pos,
         vel,

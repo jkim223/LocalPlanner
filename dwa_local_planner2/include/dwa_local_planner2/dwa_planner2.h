@@ -152,10 +152,12 @@ namespace dwa_local_planner2 {
        */
       bool setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan);
 
+	  //#!
       /**
        * @brief Set safety probability to each directions
        */
       void setProbability(std::vector<double> &arr);
+	  //#!
 
     private:
 
@@ -191,8 +193,9 @@ namespace dwa_local_planner2 {
       base_local_planner::MapGridCostFunction goal_front_costs_;
       base_local_planner::MapGridCostFunction alignment_costs_;
       base_local_planner::TwirlingCostFunction twirling_costs_;
+	  //#!
       base_local_planner::ProbabilityCostFunction probability_costs_;
-
+	  //#!
       base_local_planner::SimpleScoredSamplingPlanner scored_sampling_planner_;
 
       std::vector<double> safety_direction_;
