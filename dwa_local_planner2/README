@@ -1,1 +1,2 @@
-.
+Before executing,
+chmod ./dwa_local_planner2/cfg/DWAPlanner2.cfg as execuatble.
