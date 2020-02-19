@@ -1,4 +1,4 @@
-# DWA local planner2
+# Probabilistic DWA (DWA local planner2)
 
 This local planner complements DWA(Dynamic Window Approach), which is mainly used as a local planner in ROS, to have **avoiding function for dynamic environments**. 
 
